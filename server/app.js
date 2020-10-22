@@ -8,6 +8,10 @@ const mongoose = require('mongoose');
 const expressHandlebars = require('express-handlebars');
 const session = require('express-session');
 
+const RedisStore = require('connect-redis')(session);
+const url = require('url');
+const redis = require('redis');
+
 const port = process.env.PORT || process.env.NODE_PORT || 3000;
 
 const dbURL = process.env.MONGODB_URL || 'mongodb://localhost/DomoMaker';
@@ -24,6 +28,24 @@ mongoose.connect(dbURL, mongooseOptions, (err) => {
   }
 });
 
+//Connecting to Redis
+let redisURL = {
+  hostname: 'redis-16373.c114.us-east-1-4.ec2.cloud.redislabs.com',
+  port: '16373',
+};
+
+let redisPASS = 'STce73xlfTj31YDN1yRWTPRoZsJh6qSs';
+if (process.env.REDISCLOUD_URL) {
+  redisURL = url.parse(process.env.REDISCLOUD_URL);
+  [, redisPASS] = redisURL.auth.split(':');
+}
+
+let redisClient = redis.createClient({
+  host: redisURL.hostname,
+  port: redisURL.port,
+  password: redisPASS,
+});
+
 const router = require('./router.js');
 
 const app = express();
@@ -36,9 +58,15 @@ app.use(bodyParser.urlencoded({
 
 app.use(session({
   key: 'sessionid',
+  store: new RedisStore({
+    client: redisClient,
+  }),
   secret: 'Domo Arigato',
   resave: true,
   saveUninitialized: true,
+  cookie: {
+    httpOnly: true,
+  },
 }));
 
 app.engine('handlebars', expressHandlebars({ defaultLayout: 'main' }));
@@ -54,3 +82,4 @@ app.listen(port, (err) => {
   }
   console.log(`Listening on port ${port}`);
 });
+
